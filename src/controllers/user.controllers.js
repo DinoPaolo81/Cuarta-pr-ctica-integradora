@@ -1,4 +1,5 @@
-import { findUsers, findUserById, updateUser } from "../service/userService.js";
+import { findUsers, findUserById} from "../service/userService.js";
+import path from 'path';
 
 export const getUsers = async (req, res, next) => {
 
@@ -14,35 +15,66 @@ export const getUsers = async (req, res, next) => {
     }
 }
 
-export const updateRole = async (req, res, next) => {
-    const user = req.user;
-    const userId = req.params.uid;
-    req.logger.http('Petición llegó al controlador(updateRole)');
-
+export const updateUserDocuments = async (req, res, next) => {
+    req.logger.http('Petición llegó al controlador (uploadDocument');
     try {
-        const userDB = await findUserById(userId);
-
-        if (userDB.role === "admin") {
-            return res.status(403).json({
-                message: "No se puede cambiar el rol del usuario"
-            })
+        if (!req.files) {
+            return res.status(400).send({
+                status: "error",
+                message: "No se ha proporcionado ningún documento",
+            });
         }
 
-        const newRole = user.role === 'user' ? 'premium' : 'user';
-
-        if (user.role === "admin" || user._id.equals(userDB._id)) {
-            await updateUser(userId, { role: newRole })
-            return res.status(200).json({
-                message: "El rol del usuario ha sido actualizado"
-            })
+        if (req.fileValidationError) {
+            return res.status(400).send({
+                status: "error",
+                message: "El formato para la imagen de perfil debe ser: jpeg, jpg o png.",
+            });
         }
 
-        return res.status(403).json({
-            message: "No tiene los permisos para cambiar el rol del usuario"
+        const user = await findUserById(req.user._id);
+
+        //Si se subio una imagen de perfil
+        if (req.files['profile']) {
+            const profileIndex = user.documents.findIndex(document => document.name === "profile");
+            if (profileIndex !== -1) {
+                user.documents.splice(profileIndex, 1);
+            }
+
+            const profileFile = req.files['profile'][0];
+            const profileFilePath = path.join(profileFile.destination, profileFile.filename);
+
+            const newProfileFile = {
+                name: 'profile',
+                reference: profileFilePath
+            };
+
+            user.documents.push(newProfileFile);
+        }
+
+        //Si se subio uno o mas documentos
+        if (req.files['document']) {
+            req.files['document'].forEach(document => {
+                const documentFilePath = path.join(document.destination, document.filename);
+
+                const newDocumentFile = {
+                    name: document.originalname,
+                    reference: documentFilePath
+                };
+
+                user.documents.push(newDocumentFile);
+            });
+        }
+
+        await user.save()
+
+        return res.status(200).json({
+            status: "success",
+            message: "Se han guardado todos los documentos",
         })
 
     } catch (error) {
         req.logger.error(error.message);
         next(error);
     }
-}
+};

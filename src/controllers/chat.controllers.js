@@ -1,5 +1,5 @@
 import { createNewMessage, findMessages } from "../service/messageService.js";
-import { io } from "../app.js";
+//import { io } from "../index.js";
 
 export const postMessage = async (req, res, next) => {
     const { message } = req.body;
@@ -16,6 +16,7 @@ export const postMessage = async (req, res, next) => {
         io.emit("messagesUpdated", messages);
 
         res.status(200).send({
+            status: "success",
             message: "Mensaje enviado exitosamente",
         });
 
@@ -33,7 +34,8 @@ export const getMessages = async (req, res, next) => {
         const messages = await findMessages();
         console.log(messages)
 
-        res.status(200).json({ 
+        res.status(200).json({
+            status: "success",
             messages: messages
         });
 

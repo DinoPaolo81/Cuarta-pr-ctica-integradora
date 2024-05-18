@@ -1,4 +1,4 @@
-import { findUsers, findUserById} from "../service/userService.js";
+import { findUsers, findUserById, deleteUserById, findAndDeleteOldUsers } from "../service/userService.js";
 import path from 'path';
 
 export const getUsers = async (req, res, next) => {
@@ -7,7 +7,47 @@ export const getUsers = async (req, res, next) => {
 
     try {
         const users = await findUsers()
-        res.status(200).json({ users })
+        res.status(200).json({
+            status: "success",
+            payload: users
+        })
+
+    } catch (error) {
+        req.logger.error(error.message)
+        next(error)
+    }
+}
+
+export const deleteUser = async (req, res, next) => {
+
+    req.logger.http(`Petición llegó al controlador (deleteUser).`);
+    const userId = req.params.uid
+
+    try {
+        const user = await deleteUserById(userId);
+        res.status(200).json({
+            status: "success",
+            message: `El usuario Id: ${userId} ha sido eliminado`
+        })
+
+    } catch (error) {
+        req.logger.error(error.message)
+        next(error)
+    }
+}
+
+export const deleteOldUsers = async (req, res, next) => {
+
+    req.logger.http(`Petición llegó al controlador (deleteOldUsers).`);
+
+    try {
+
+        const deletedUserCount = await findAndDeleteOldUsers()
+        res.status(200).json({
+            status: "success",
+            message: `Se han eliminado ${deletedUserCount} usuario/s`
+        })
+
 
     } catch (error) {
         req.logger.error(error.message)
@@ -78,3 +118,41 @@ export const updateUserDocuments = async (req, res, next) => {
         next(error);
     }
 };
+
+export const updateUserRole = async (req, res, next) => {
+    req.logger.http(`Petición llegó al controlador (updateUserRole).`);
+    const user = req.user;
+
+    try {
+        if (user.role === "usuario") {
+            const premiumDocumentsCount = user.documents.reduce((count, doc) => {
+                return count + (doc.name.startsWith('profile') ? 0 : 1);
+            }, 0);
+
+            if (premiumDocumentsCount < 3) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'El usuario no cumple con los requisitos para el rol premium'
+                });
+            }
+
+            user.role = 'premium';
+            await user.save();
+            return res.status(200).json({
+                status: "error",
+                message: 'Rol de usuario actualizado a premium'
+            });
+        }
+
+        user.role = 'usuario';
+        await user.save();
+        return res.status(200).json({
+            status: "error",
+            message: 'Rol premium actualizado a usuario'
+        });
+
+    } catch (error) {
+        req.logger.error(error.message);
+        next(error);
+    }
+}
